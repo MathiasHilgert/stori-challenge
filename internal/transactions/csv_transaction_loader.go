@@ -167,25 +167,42 @@ func (loader *CSVTransactionLoader) parseIDOptimized(idStr string) (uint, error)
 }
 
 // parseDateOptimized performs optimized date parsing with cached year and layout.
+// Supports both M/D and M/D/YYYY formats automatically.
 func (loader *CSVTransactionLoader) parseDateOptimized(dateStr string) (time.Time, error) {
 	if dateStr == "" {
 		return time.Time{}, fmt.Errorf("date cannot be empty")
 	}
 
-	// Use strings.Builder for efficient string concatenation
-	var dateBuilder strings.Builder
-	dateBuilder.Grow(len(dateStr) + 5) // Pre-allocate capacity
-	dateBuilder.WriteString(dateStr)
-	dateBuilder.WriteByte('/')
-	dateBuilder.WriteString(strconv.Itoa(loader.currentYear))
+	// Count slashes to determine if year is already included
+	slashCount := strings.Count(dateStr, "/")
+	
+	switch slashCount {
+	case 1:
+		// Format: M/D - add current year
+		var dateBuilder strings.Builder
+		dateBuilder.Grow(len(dateStr) + 5) // Pre-allocate capacity
+		dateBuilder.WriteString(dateStr)
+		dateBuilder.WriteByte('/')
+		dateBuilder.WriteString(strconv.Itoa(loader.currentYear))
 
-	// Parse with cached layout
-	date, err := time.Parse(loader.dateLayout, dateBuilder.String())
-	if err != nil {
-		return time.Time{}, fmt.Errorf("must be in M/D format: %w", err)
+		// Parse with cached layout
+		date, err := time.Parse(loader.dateLayout, dateBuilder.String())
+		if err != nil {
+			return time.Time{}, fmt.Errorf("must be in M/D format: %w", err)
+		}
+		return date, nil
+
+	case 2:
+		// Format: M/D/YYYY - parse directly
+		date, err := time.Parse(loader.dateLayout, dateStr)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("must be in M/D/YYYY format: %w", err)
+		}
+		return date, nil
+
+	default:
+		return time.Time{}, fmt.Errorf("invalid date format - must be M/D or M/D/YYYY, got %s", dateStr)
 	}
-
-	return date, nil
 }
 
 // parseAmountOptimized performs high-performance amount parsing with minimal string operations.

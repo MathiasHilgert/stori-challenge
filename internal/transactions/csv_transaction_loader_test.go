@@ -47,6 +47,56 @@ func TestCSVTransactionLoader_LoadTransactions(t *testing.T) {
 			description: "should parse valid CSV with positive and negative amounts",
 		},
 		{
+			name: "it should successfully load transactions with full year dates",
+			csvContent: `ID,Date,Transaction
+1,1/5/2022,+1250.0
+2,2/14/2023,-85.5
+3,12/31/2024,+300.0`,
+			expectedResult: []Transaction{
+				{
+					ID:     1,
+					Date:   time.Date(2022, 1, 5, 0, 0, 0, 0, time.UTC),
+					Amount: 1250.0,
+				},
+				{
+					ID:     2,
+					Date:   time.Date(2023, 2, 14, 0, 0, 0, 0, time.UTC),
+					Amount: -85.5,
+				},
+				{
+					ID:     3,
+					Date:   time.Date(2024, 12, 31, 0, 0, 0, 0, time.UTC),
+					Amount: 300.0,
+				},
+			},
+			description: "should parse valid CSV with full year dates",
+		},
+		{
+			name: "it should handle mixed date formats",
+			csvContent: `ID,Date,Transaction
+1,7/15,+60.5
+2,1/5/2022,+1250.0
+3,8/2,-20.46`,
+			expectedResult: []Transaction{
+				{
+					ID:     1,
+					Date:   time.Date(currentYear, 7, 15, 0, 0, 0, 0, time.UTC),
+					Amount: 60.5,
+				},
+				{
+					ID:     2,
+					Date:   time.Date(2022, 1, 5, 0, 0, 0, 0, time.UTC),
+					Amount: 1250.0,
+				},
+				{
+					ID:     3,
+					Date:   time.Date(currentYear, 8, 2, 0, 0, 0, 0, time.UTC),
+					Amount: -20.46,
+				},
+			},
+			description: "should handle mixed M/D and M/D/YYYY formats in same file",
+		},
+		{
 			name: "it should handle transactions without sign prefix",
 			csvContent: `ID,Date,Transaction
 1,1/1,100.00
@@ -90,7 +140,21 @@ abc,7/15,+60.5`,
 			csvContent: `ID,Date,Transaction
 1,2023/07/15,+60.5`,
 			expectedError: "record validation error at line 2",
-			description:   "should fail when date format is incorrect",
+			description:   "should fail when date format uses slashes in wrong positions",
+		},
+		{
+			name: "it should reject invalid date format with too many slashes",
+			csvContent: `ID,Date,Transaction
+1,1/2/3/4,+60.5`,
+			expectedError: "record validation error at line 2",
+			description:   "should fail when date has too many slash separators",
+		},
+		{
+			name: "it should reject invalid date format with no slashes",
+			csvContent: `ID,Date,Transaction
+1,20230715,+60.5`,
+			expectedError: "record validation error at line 2",
+			description:   "should fail when date has no slash separators",
 		},
 		{
 			name: "it should reject empty date values",
