@@ -1,0 +1,240 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Stori Challenge - Minimal CloudFormation template for transaction processing'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'stori-challenge'
+    Description: 'Name of the project for resource naming'
+  LambdaCodeBucket:
+    Type: String
+    Default: ''
+    Description: 'S3 bucket containing Lambda deployment package (optional)'
+  LambdaCodeKey:
+    Type: String
+    Default: ''
+    Description: 'S3 key for Lambda deployment package (optional)'
+
+Conditions:
+  HasLambdaCode: !And
+    - !Not [!Equals [!Ref LambdaCodeBucket, '']]
+    - !Not [!Equals [!Ref LambdaCodeKey, '']]
+
+Resources:
+  # AWS Secrets Manager for storing SMTP configuration
+  SMTPHostSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: 'SMTP_HOST'
+      Description: 'SMTP Host for email sending'
+      SecretString: 'placeholder'
+
+  SMTPPortSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: 'SMTP_PORT'
+      Description: 'SMTP Port for email sending'
+      SecretString: 'placeholder'
+
+  SMTPUsernameSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: 'SMTP_USERNAME'
+      Description: 'SMTP Username for email authentication'
+      SecretString: 'placeholder'
+
+  SMTPPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: 'SMTP_PASSWORD'
+      Description: 'SMTP Password for email authentication'
+      SecretString: 'placeholder'
+
+  SMTPFromSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: 'SMTP_FROM'
+      Description: 'SMTP From address for email sending'
+      SecretString: 'placeholder'
+
+  # S3 Bucket for storing CSV transaction files
+  TransactionsBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: S3InvokeLambdaPermission
+    Properties:
+      BucketName: !Sub '${ProjectName}-transactions-${AWS::AccountId}'
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt TransactionProcessorFunction.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: .csv
+
+  # DynamoDB Table for storing transactions
+  TransactionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-transactions'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: account_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: account-id-index
+          KeySchema:
+            - AttributeName: account_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  # IAM Role for Lambda execution
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-lambda-execution-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${ProjectName}-transactions-${AWS::AccountId}/*'
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt TransactionsTable.Arn
+                  - !Sub
+                      - '${TableArn}/index/*'
+                      - { TableArn: !GetAtt TransactionsTable.Arn }
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource:
+                  - !Ref SMTPHostSecret
+                  - !Ref SMTPPortSecret
+                  - !Ref SMTPUsernameSecret
+                  - !Ref SMTPPasswordSecret
+                  - !Ref SMTPFromSecret
+
+  # Lambda function for processing transactions
+  TransactionProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-transaction-processor'
+      Runtime: go1.x
+      Handler: main
+      Code: !If
+        - HasLambdaCode
+        - S3Bucket: !Ref LambdaCodeBucket
+          S3Key: !Ref LambdaCodeKey
+        - ZipFile: |
+            # Placeholder code - will be replaced with actual deployment package
+            def lambda_handler(event, context):
+                return {'statusCode': 200, 'body': 'Placeholder'}
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref TransactionsTable
+      Timeout: 300
+      MemorySize: 512
+
+  # Permission for S3 to invoke Lambda
+  S3InvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TransactionProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub 'arn:${AWS::Partition}:s3:::${ProjectName}-transactions-${AWS::AccountId}'
+
+Outputs:
+  SMTPHostSecretArn:
+    Description: 'ARN of the SMTP Host secret'
+    Value: !Ref SMTPHostSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-SMTPHostSecretArn'
+
+  SMTPPortSecretArn:
+    Description: 'ARN of the SMTP Port secret'
+    Value: !Ref SMTPPortSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-SMTPPortSecretArn'
+
+  SMTPUsernameSecretArn:
+    Description: 'ARN of the SMTP Username secret'
+    Value: !Ref SMTPUsernameSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-SMTPUsernameSecretArn'
+
+  SMTPPasswordSecretArn:
+    Description: 'ARN of the SMTP Password secret'
+    Value: !Ref SMTPPasswordSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-SMTPPasswordSecretArn'
+
+  SMTPFromSecretArn:
+    Description: 'ARN of the SMTP From secret'
+    Value: !Ref SMTPFromSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-SMTPFromSecretArn'
+
+  BucketName:
+    Description: 'Name of the S3 bucket for transaction files'
+    Value: !Ref TransactionsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-BucketName'
+
+  TableName:
+    Description: 'Name of the DynamoDB table for transactions'
+    Value: !Ref TransactionsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TableName'
+
+  LambdaFunctionArn:
+    Description: 'ARN of the Lambda function'
+    Value: !GetAtt TransactionProcessorFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaArn'
+
+  LambdaFunctionName:
+    Description: 'Name of the Lambda function'
+    Value: !Ref TransactionProcessorFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaName'
