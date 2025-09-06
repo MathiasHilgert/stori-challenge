@@ -1,0 +1,205 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="es">
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resumen de Transacciones</title>
+    <style type="text/css">
+        /* Reset styles */
+        table {
+            border-collapse: collapse !important;
+        }
+
+        /* Mobile styles */
+        @media only screen and (max-width: 600px) {
+            .wrapper {
+                width: 100% !important;
+            }
+
+            .container {
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+
+            .mobile-padding {
+                padding: 20px 16px !important;
+            }
+
+            .mobile-padding-sm {
+                padding: 16px 12px !important;
+            }
+
+            .mobile-text-lg {
+                font-size: 28px !important;
+            }
+
+            .mobile-text-md {
+                font-size: 16px !important;
+            }
+
+            .mobile-text-sm {
+                font-size: 12px !important;
+            }
+
+            .mobile-logo {
+                max-width: 80px !important;
+            }
+
+            .mobile-stack {
+                display: block !important;
+                width: 100% !important;
+            }
+
+            .mobile-center {
+                text-align: center !important;
+            }
+
+            .mobile-margin {
+                margin-bottom: 16px !important;
+            }
+        }
+
+        /* Android specific */
+        @media only screen and (max-width: 480px) {
+            .android-padding {
+                padding: 12px 8px !important;
+            }
+
+            .android-text {
+                font-size: 24px !important;
+            }
+        }
+    </style>
+</head>
+
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #ffffff;">
+
+    <!-- Wrapper Table -->
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #ffffff;" class="wrapper">
+        <tr>
+            <td align="center" style="padding: 40px 20px;" class="mobile-padding">
+
+                <!-- Main Content Table -->
+                <table cellpadding="0" cellspacing="0" border="0" width="500" style="max-width: 500px;"
+                    class="container">
+
+                    <!-- Header -->
+                    <tr>
+                        <td style="background-color: #05d180; text-align: center; padding: 24px;"
+                            class="mobile-padding-sm">
+                            <img src="https://viajaplus.mx/theme/stori/assets/images/stori-logo.png" alt="Stori"
+                                style="max-width: 100px; height: auto; display: block; margin: 0 auto;"
+                                class="mobile-logo" />
+                        </td>
+                    </tr>
+
+                    <!-- Content Area -->
+                    <tr>
+                        <td style="padding: 40px 24px;" class="mobile-padding">
+
+                            <!-- Title -->
+                            <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 32px;"
+                                class="mobile-margin">
+                                <tr>
+                                    <td style="text-align: center; font-size: 24px; color: #1a1a1a; font-weight: normal;"
+                                        class="mobile-text-md">
+                                        Resumen de Transacciones
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Balance -->
+                            <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 40px;"
+                                class="mobile-margin">
+                                <tr>
+                                    <td style="text-align: center; padding: 24px; font-size: 36px; font-weight: normal; color: #1a1a1a;"
+                                        class="mobile-text-lg android-text android-padding">
+                                        ${{formatAmount .TotalBalance}}
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Summary -->
+                            {{range $year, $monthData := .YearlyData}}
+
+                            <!-- Year -->
+                            <table cellpadding="0" cellspacing="0" border="0" width="100%"
+                                style="margin: 30px 0 20px 0;" class="mobile-margin">
+                                <tr>
+                                    <td style="font-size: 18px; color: #05d180; font-weight: bold;"
+                                        class="mobile-text-md">
+                                        {{$year}}
+                                    </td>
+                                </tr>
+                            </table>
+
+                            {{range $month, $data := $monthData}}
+                            <!-- Month -->
+                            <table cellpadding="0" cellspacing="0" border="0" width="100%"
+                                style="margin-bottom: 24px; border-bottom: 1px solid #f0f0f0; padding-bottom: 16px;"
+                                class="mobile-margin">
+                                <tr>
+                                    <td style="padding: 8px 0;" class="mobile-padding-sm">
+
+                                        <!-- Month Name -->
+                                        <div style="font-size: 14px; color: #666; margin-bottom: 8px;"
+                                            class="mobile-text-sm">
+                                            {{monthName $month}}
+                                        </div>
+
+                                        <!-- Details -->
+                                        <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                                            <tr>
+                                                <td style="color: #1a1a1a; font-size: 14px; padding: 2px 0;"
+                                                    class="mobile-text-sm mobile-center mobile-stack">
+                                                    {{$data.TransactionCount}} transacciones</td>
+                                                <td style="text-align: right; padding: 2px 0;"
+                                                    class="mobile-center mobile-stack">
+                                                    {{if hasDebit $data.AverageDebit}}
+                                                    <span style="color: #e63946; font-size: 14px;"
+                                                        class="mobile-text-sm">-${{formatAmount
+                                                        $data.AverageDebit}}</span>
+                                                    {{end}}
+                                                    {{if hasCredit $data.AverageCredit}}
+                                                    {{if hasDebit $data.AverageDebit}}<span
+                                                        style="color: #666; margin: 0 8px;">/</span>{{end}}
+                                                    <span style="color: #05d180; font-size: 14px;"
+                                                        class="mobile-text-sm">+${{formatAmount
+                                                        $data.AverageCredit}}</span>
+                                                    {{end}}
+                                                </td>
+                                            </tr>
+                                        </table>
+
+                                    </td>
+                                </tr>
+                            </table>
+                            {{end}}
+                            {{end}}
+
+                            <!-- Footer -->
+                            <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top: 40px;"
+                                class="mobile-margin">
+                                <tr>
+                                    <td style="color: #999; font-size: 11px; text-align: center; line-height: 1.4;"
+                                        class="mobile-text-sm">
+                                        SAVVI Financieros, S.A. de C.V.<br>
+                                        {{.GeneratedAt}}
+                                    </td>
+                                </tr>
+                            </table>
+
+                        </td>
+                    </tr>
+
+                </table>
+
+            </td>
+        </tr>
+    </table>
+
+</body>
+
+</html>
