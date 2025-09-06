@@ -2,9 +2,8 @@ package summaries
 
 import (
 	"context"
-	"time"
-
 	"stori-challenge/internal/transactions"
+	"time"
 )
 
 // Summarizer defines the interface for calculating transaction summaries.
