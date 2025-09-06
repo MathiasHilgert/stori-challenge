@@ -421,6 +421,15 @@ While the system meets all the current challenge requirements, several enhanceme
    * Provide a CLI utility for uploading test CSVs and triggering Lambdas locally.
    * Improve Taskfile automation with additional shortcuts for testing and deployment.
 
+9. **✉️ Email service**
+    * Integrate with a dedicated email service provider (e.g., Amazon SES, SendGrid) for better deliverability and analytics.
+    * Implement email retry logic and dead-letter queues for failed deliveries.
+
+10. **🚀 More decoupled microservices**
+    * Separate the CSV processing, summary calculation, and email sending into distinct Lambda functions.
+    * Use SQS or SNS to orchestrate communication between services for better scalability.
+    * This is just a demo, so I kept it simple. But in a real-world scenario, this would be possible.
+
 ---
 
 <p align="center">
