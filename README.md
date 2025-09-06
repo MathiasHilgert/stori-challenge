@@ -362,7 +362,6 @@ The project includes a comprehensive set of tasks to streamline development and 
 | --------------------- | ------------------- | -------------- |
 | `DYNAMODB_TABLE_NAME` | DynamoDB table name | Auto-generated |
 | `AWS_REGION`          | AWS region          | `us-east-1`    |
-| `LOG_LEVEL`           | Logging level       | `info`         |
 
 ### 🏷️ S3 Object Tags (Required)
 
