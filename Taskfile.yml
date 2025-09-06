@@ -16,6 +16,13 @@ tasks:
   # =======================
   # High-level commands
   # =======================
+  test:
+    desc: "Run all unit tests"
+    silent: true
+    cmds:
+      - echo "Running all unit tests..."
+      - go test -v ./...
+
   setup:
     desc: "Start everything (containers + Lambda + CloudFormation)"
     silent: true
