@@ -1,0 +1,55 @@
+services:
+  stori-challenge-localstack:
+    container_name: stori-challenge-localstack
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"            # LocalStack Gateway
+      - "4510-4559:4510-4559"  # external services port range
+    environment:
+      - DEBUG=${DEBUG-0}
+      - LAMBDA_EXECUTOR=${LAMBDA_EXECUTOR-}
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "stori-localstack-data:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - localstack
+
+  stori-challenge-terminal:
+    container_name: stori-challenge-terminal
+    image: alpine:latest
+    depends_on:
+      stori-challenge-localstack:
+        condition: service_healthy
+    command: sh /scripts/setup-ls-terminal.sh
+    volumes:
+      - "./scripts:/scripts"
+      - "./infrastructure:/infrastructure"
+      - "./localstack-secrets.json:/secrets/localstack-secrets.json"
+    environment:
+      - AWS_ENDPOINT_URL=http://stori-challenge-localstack:4566
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    healthcheck:
+      test: ["CMD", "sh", "-c", "test -f /tmp/aws-setup-complete && aws --version && aws --endpoint-url=http://stori-challenge-localstack:4566 s3 ls 2>/dev/null"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 180s
+    networks:
+      - localstack
+
+networks:
+  localstack:
+    driver: bridge
+
+volumes:
+  stori-localstack-data:
+    driver: local

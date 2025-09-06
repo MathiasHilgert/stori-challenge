@@ -1,0 +1,194 @@
+version: "3"
+
+vars:
+  STACK_NAME: stori-stack
+  BUCKET_NAME: lambda-deployments
+  TRANSACTIONS_BUCKET: stori-challenge-transactions-000000000000
+  LAMBDA_PATH: cmd/lambda
+  LAMBDA_BINARY: main
+  LAMBDA_ZIP: lambda-deployment.zip
+  LOCALSTACK_ENDPOINT: http://stori-challenge-localstack:4566
+  TERMINAL_CONTAINER: stori-challenge-terminal
+  LOCALSTACK_CONTAINER: stori-challenge-localstack
+
+
+tasks:
+  # =======================
+  # High-level commands
+  # =======================
+  setup:
+    desc: "Start everything (containers + Lambda + CloudFormation)"
+    silent: true
+    cmds:
+      - echo "Starting full environment..."
+      - task: docker:restart
+      - task: deploy
+      - echo "Environment setup completed."
+
+  deploy:
+    desc: "Build Lambda and deploy stack into LocalStack"
+    silent: true
+    cmds:
+      - echo "Clearing old CloudFormation stack..."
+      - task: cf:clear
+      - echo "Building Lambda package..."
+      - task: lambda:build
+      - echo "Deploying CloudFormation stack..."
+      - task: cf:deploy
+      - echo "Populating secrets from JSON file..."
+      - task: secrets:populate
+      - echo "Deployment finished."
+
+  down:
+    desc: "Stop containers"
+    silent: true
+    cmds:
+      - echo "Stopping containers..."
+      - docker-compose down
+      - echo "Containers stopped."
+
+  clean:
+    desc: "Clean up containers"
+    silent: true
+    cmds:
+      - echo "Stopping containers..."
+      - docker-compose down
+      - echo "Cleanup completed."
+
+  # =======================
+  # Docker utilities
+  # =======================
+  docker:restart:
+    desc: "Restart containers (docker-compose)"
+    silent: true
+    cmds:
+      - echo "Stopping old containers..."
+      - docker-compose down
+      - echo "Starting fresh containers..."
+      - docker-compose up -d --wait
+      - echo "Containers restarted successfully."
+
+  terminal:
+    desc: "Access the terminal container"
+    silent: true
+    cmds:
+      - echo "Opening terminal session in {{.TERMINAL_CONTAINER}}..."
+      - docker exec -it {{.TERMINAL_CONTAINER}} sh
+
+  logs:localstack:
+    desc: "View LocalStack logs"
+    silent: true
+    cmds:
+      - echo "Streaming LocalStack logs..."
+      - docker logs -f {{.LOCALSTACK_CONTAINER}}
+
+  # =======================
+  # Lambda build & deploy
+  # =======================
+  lambda:build:
+    desc: "Build Go Lambda and package as zip"
+    silent: true
+    cmds:
+      - echo "Building Go Lambda binary..."
+      - |
+        docker run --rm -v .:/workspace -w /workspace golang:1.24-alpine sh -c "
+          apk add --no-cache zip &&
+          cd {{.LAMBDA_PATH}} &&
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags='-s -w' -o {{.LAMBDA_BINARY}} main.go &&
+          strip {{.LAMBDA_BINARY}} || true &&
+          zip {{.LAMBDA_ZIP}} {{.LAMBDA_BINARY}} &&
+          mv {{.LAMBDA_ZIP}} /workspace/
+        "
+      - echo "Lambda build and zip completed - file {{.LAMBDA_ZIP}}"
+
+  lambda:logs:
+    desc: "View Lambda logs in LocalStack"
+    silent: true
+    cmds:
+      - echo "Fetching Lambda logs from LocalStack..."
+      - docker exec {{.TERMINAL_CONTAINER}} aws --endpoint-url={{.LOCALSTACK_ENDPOINT}} logs filter-log-events --log-group-name /aws/lambda/stori-challenge-transaction-processor --query 'events[*].[timestamp,message]' --output table
+
+  # =======================
+  # CloudFormation utilities
+  # =======================
+  cf:clear:
+    desc: "Delete the CloudFormation stack if it exists"
+    silent: true
+    cmds:
+      - echo "Deleting CloudFormation stack {{.STACK_NAME}} if it exists..."
+      - docker exec {{.TERMINAL_CONTAINER}} aws --endpoint-url={{.LOCALSTACK_ENDPOINT}} cloudformation delete-stack --stack-name {{.STACK_NAME}}
+      - echo "CloudFormation stack deletion command issued."
+
+  cf:deploy:
+    desc: "Upload Lambda to S3 and create stack in LocalStack"
+    silent: true
+    cmds:
+      - echo "Copying Lambda package into container..."
+      - docker cp {{.LAMBDA_ZIP}} {{.TERMINAL_CONTAINER}}:/tmp/
+      - echo "Ensuring S3 bucket {{.BUCKET_NAME}} exists..."
+      - docker exec {{.TERMINAL_CONTAINER}} aws --endpoint-url={{.LOCALSTACK_ENDPOINT}} s3 mb s3://{{.BUCKET_NAME}} --region us-east-1 || true
+      - echo "Uploading Lambda package to S3..."
+      - docker exec {{.TERMINAL_CONTAINER}} aws --endpoint-url={{.LOCALSTACK_ENDPOINT}} s3 cp /tmp/{{.LAMBDA_ZIP}} s3://{{.BUCKET_NAME}}/{{.LAMBDA_ZIP}}
+      - echo "Creating CloudFormation stack {{.STACK_NAME}}..."
+      - docker exec {{.TERMINAL_CONTAINER}} aws --endpoint-url={{.LOCALSTACK_ENDPOINT}} cloudformation create-stack --stack-name {{.STACK_NAME}} --template-body file:///infrastructure/cloudformation/localstack.yaml --capabilities CAPABILITY_NAMED_IAM --parameters ParameterKey=LambdaCodeBucket,ParameterValue={{.BUCKET_NAME}} ParameterKey=LambdaCodeKey,ParameterValue={{.LAMBDA_ZIP}}
+      - echo "CloudFormation stack creation initiated."
+
+  # =======================
+  # S3 utilities
+  # =======================
+  s3:upload:
+    desc: "Upload file to S3 with tags (FILE=path ACCOUNT_ID=id EMAIL=email)"
+    silent: true
+    cmds:
+      - |
+        if [ -z "{{.FILE}}" ] || [ -z "{{.ACCOUNT_ID}}" ] || [ -z "{{.EMAIL}}" ]; then
+          echo "Error: Missing required parameters"
+          echo "Usage: task s3:upload FILE=data/transactions.csv ACCOUNT_ID=12345 EMAIL=user@example.com"
+          exit 1
+        fi
+      - echo "Uploading {{.FILE}} to S3 with tags..."
+      - docker cp "{{.FILE}}" {{.TERMINAL_CONTAINER}}:/tmp/upload-file
+      - docker exec {{.TERMINAL_CONTAINER}} aws --endpoint-url={{.LOCALSTACK_ENDPOINT}} s3api put-object --bucket {{.TRANSACTIONS_BUCKET}} --key "{{.FILE | base}}" --body /tmp/upload-file --tagging "account_id={{.ACCOUNT_ID}}&email={{.EMAIL}}"
+      - echo "File uploaded successfully with tags account_id={{.ACCOUNT_ID}} and email={{.EMAIL}}"
+
+  s3:list:
+    desc: "List files in S3 transactions bucket with their tags"
+    silent: true
+    cmds:
+      - echo "Listing files in S3 bucket {{.TRANSACTIONS_BUCKET}}..."
+      - docker exec {{.TERMINAL_CONTAINER}} aws --endpoint-url={{.LOCALSTACK_ENDPOINT}} s3api list-objects-v2 --bucket {{.TRANSACTIONS_BUCKET}} --query 'Contents[*].[Key,LastModified,Size]' --output table
+
+  # =======================
+  # Secrets Manager utilities
+  # =======================
+  secrets:populate:
+    desc: "Populate Secrets Manager with data from JSON file"
+    silent: true
+    cmds:
+      - echo "Populating secrets from JSON file..."
+      - docker exec {{.TERMINAL_CONTAINER}} sh /scripts/populate-secrets.sh
+
+  secrets:list:
+    desc: "List all secrets and values in JSON format"
+    silent: true
+    cmds:
+      - echo "Fetching all secrets from AWS Secrets Manager..."
+      - |
+        docker exec {{.TERMINAL_CONTAINER}} sh -c '
+          aws --endpoint-url={{.LOCALSTACK_ENDPOINT}} secretsmanager list-secrets --query "SecretList[*].Name" --output text | tr "\t" "\n" | while read secret; do
+            if [ -n "$secret" ]; then
+              value=$(aws --endpoint-url={{.LOCALSTACK_ENDPOINT}} secretsmanager get-secret-value --secret-id "$secret" --query "SecretString" --output text)
+              printf "{\"name\": %s, \"value\": %s}\n" "$(echo "$secret" | jq -R .)" "$(echo "$value" | jq -R .)"
+            fi
+          done | jq -s "."
+        '
+
+  # =======================
+  # DynamoDB utilities
+  # =======================
+  db:list:
+    desc: "List all records from DynamoDB transactions table"
+    silent: true
+    cmds:
+      - echo "Fetching all records from DynamoDB table..."
+      - docker exec {{.TERMINAL_CONTAINER}} aws --endpoint-url={{.LOCALSTACK_ENDPOINT}} dynamodb scan --table-name stori-challenge-transactions --output table
