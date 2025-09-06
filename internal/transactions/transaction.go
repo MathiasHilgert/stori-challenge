@@ -13,4 +13,7 @@ type Transaction struct {
 	// Amount is the monetary value of the transaction.
 	// In this case, for demo purposes, we don't care about currency or precision.
 	Amount float64
+
+	// AccountID is the identifier of the account associated with this transaction.
+	AccountID string
 }
