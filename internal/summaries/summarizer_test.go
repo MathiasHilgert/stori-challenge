@@ -1,6 +1,7 @@
-package summary
+package summaries
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -146,7 +147,7 @@ func TestDefaultSummarizer_CalculateSummary(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Act
-			result := summarizer.CalculateSummary(tt.transactions)
+			result := summarizer.CalculateSummary(context.Background(), tt.transactions)
 
 			// Assert
 			assert.Equal(t, tt.expectedTotalBalance, result.TotalBalance, "Total balance should match")

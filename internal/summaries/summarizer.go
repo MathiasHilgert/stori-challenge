@@ -1,6 +1,7 @@
-package summary
+package summaries
 
 import (
+	"context"
 	"time"
 
 	"stori-challenge/internal/transactions"
@@ -10,7 +11,7 @@ import (
 type Summarizer interface {
 	// CalculateSummary processes a slice of transactions and returns a comprehensive summary
 	// including total balance and monthly aggregated data.
-	CalculateSummary(transactions []transactions.Transaction) Summary
+	CalculateSummary(ctx context.Context, transactions []transactions.Transaction) Summary
 }
 
 // DefaultSummarizer provides the default implementation of the Summarizer interface.
@@ -23,7 +24,7 @@ func NewDefaultSummarizer() *DefaultSummarizer {
 
 // CalculateSummary implements the Summarizer interface by processing transactions
 // and generating a comprehensive summary with total balance and yearly/monthly data.
-func (ds *DefaultSummarizer) CalculateSummary(txns []transactions.Transaction) Summary {
+func (ds *DefaultSummarizer) CalculateSummary(ctx context.Context, txns []transactions.Transaction) Summary {
 	if len(txns) == 0 {
 		return Summary{
 			TotalBalance: 0,
